@@ -45,15 +45,19 @@ pub fn data_dir() -> PathBuf {
     let base = PathBuf::from(std::env::var("APPDATA").unwrap_or_else(|_| ".".into()));
     let dir = base.join("RightPanel");
     // carry settings over from the old "Edge Dock" name
+    // (copy, not move: the old folder can still be locked by WebView2)
     let old = base.join("EdgeDock");
-    if !dir.exists() && old.exists() {
-        let _ = fs::rename(&old, &dir);
+    let _ = fs::create_dir_all(&dir);
+    if old.join("settings.json").exists() && !dir.join("migrated").exists() {
+        for f in ["settings.json", "notes.txt"] {
+            let _ = fs::copy(old.join(f), dir.join(f));
+        }
+        let _ = fs::write(dir.join("migrated"), "");
         if reg_get("EdgeDock") {
             reg_del("EdgeDock");
             set_startup(true);
         }
     }
-    let _ = fs::create_dir_all(&dir);
     dir
 }
 
