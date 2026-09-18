@@ -488,6 +488,9 @@ addEventListener('mousemove', e => {
 });
 document.documentElement.addEventListener('mouseleave', () => { hoverY = null; maybeClose(); });
 addEventListener('keydown', e => { if (e.key === 'Escape') app.close(); });
+// mouse reaching the edge strip opens the panel (Linux: the only input area while closed)
+let edgeSent = false;
+addEventListener('mousemove', e => { if (!isOpen && !edgeSent && e.clientX >= innerWidth - 6) { edgeSent = true; send('edge'); setTimeout(() => edgeSent = false, 400); } });
 
 let last = performance.now();
 function frame(now) {

@@ -34,7 +34,6 @@ enum Ev {
     Open,
     /// open the panel from the tray, optionally straight into a widget
     Show(&'static str),
-    #[cfg_attr(target_os = "linux", allow(dead_code))]
     Menu(String),
 }
 
@@ -99,6 +98,7 @@ fn spawn_clip_watch(proxy: EventLoopProxy<Ev>) {
 fn spawn_edge_watch(proxy: EventLoopProxy<Ev>, win_x: i32, win_y: i32, scale: f64, edge: i32, h: i32) {
     thread::spawn(move || {
         let mut near = false;
+        let mut last = (i32::MIN, i32::MIN);
         loop {
             thread::sleep(Duration::from_millis(12));
             if OPEN.load(Ordering::Relaxed) || PICKING.load(Ordering::Relaxed) {
@@ -106,9 +106,11 @@ fn spawn_edge_watch(proxy: EventLoopProxy<Ev>, win_x: i32, win_y: i32, scale: f6
                 continue;
             }
             let Some((px, py)) = sys::cursor_pos() else { continue };
+            let moved = (px, py) != last;
+            last = (px, py);
             let in_band = py >= win_y && py < win_y + h;
             let dist = edge - 1 - px;
-            if in_band && (0..=1).contains(&dist) && !sys::left_down() {
+            if moved && in_band && (0..=1).contains(&dist) && !sys::left_down() {
                 sys::remember_foreground();
                 OPEN.store(true, Ordering::Relaxed);
                 let _ = proxy.send_event(Ev::Open);
@@ -146,8 +148,28 @@ fn add_app(proxy: EventLoopProxy<Ev>) {
     });
 }
 
-/* ---------------- tray (Windows + macOS) ---------------- */
+/* ---------------- click-through while closed ---------------- */
+/// Closed panel lets clicks through to the apps below. On Linux we instead shrink the input
+/// area to a thin strip at the screen edge: its mouse events open the panel even where the
+/// compositor won't report the global pointer position (Wayland / XWayland).
 #[cfg(not(target_os = "linux"))]
+fn set_passthrough(window: &tao::window::Window, on: bool) {
+    window.set_ignore_cursor_events(on).ok();
+}
+
+#[cfg(target_os = "linux")]
+fn set_passthrough(window: &tao::window::Window, on: bool) {
+    use gtk::prelude::*;
+    use tao::platform::unix::WindowExtUnix;
+    let gw = window.gtk_window();
+    if let Some(gdk) = gw.window() {
+        let (w, h) = (gw.allocated_width().max(1), gw.allocated_height().max(1));
+        let rect = if on { gtk::cairo::RectangleInt::new(w - 3, 0, 3, h) } else { gtk::cairo::RectangleInt::new(0, 0, w, h) };
+        gdk.input_shape_combine_region(&gtk::cairo::Region::create_rectangle(&rect), 0, 0);
+    }
+}
+
+/* ---------------- tray ---------------- */
 mod tray {
     use super::{util, Ev};
     use tao::event_loop::EventLoopProxy;
@@ -201,21 +223,13 @@ mod tray {
     }
 }
 
-#[cfg(target_os = "linux")]
-mod tray {
-    use super::Ev;
-    use tao::event_loop::EventLoopProxy;
-    /// No tray on Linux (needs libappindicator); the panel opens from the screen edge.
-    pub struct Tray;
-    impl Tray {
-        pub fn new(_: &EventLoopProxy<Ev>, _: bool) -> Option<Tray> {
-            None
-        }
-        pub fn set_startup(&self, _: bool) {}
-    }
-}
 
 fn main() {
+    #[cfg(target_os = "linux")]
+    if std::env::var("XDG_SESSION_TYPE").as_deref() == Ok("wayland") && std::env::var_os("GDK_BACKEND").is_none() {
+        // Wayland won't let an app position itself or read the pointer; XWayland does.
+        unsafe { std::env::set_var("GDK_BACKEND", "x11") };
+    }
     let dir = sys::data_dir();
     let settings_path = dir.join("settings.json");
     let notes_path = dir.join("notes.txt");
@@ -260,7 +274,7 @@ fn main() {
         builder.with_skip_taskbar(true)
     };
     let window = builder.build(&event_loop).expect("window");
-    window.set_ignore_cursor_events(true).ok();
+    set_passthrough(&window, true);
     #[cfg(windows)]
     {
         use tao::platform::windows::WindowExtWindows;
@@ -298,18 +312,23 @@ fn main() {
         *flow = ControlFlow::Wait;
         match event {
             // macOS needs the tray created once the app is running
-            Event::NewEvents(StartCause::Init) => tray = tray::Tray::new(&proxy, sys::startup_enabled()),
+            Event::NewEvents(StartCause::Init) => {
+                tray = tray::Tray::new(&proxy, sys::startup_enabled());
+                if !OPEN.load(Ordering::Relaxed) {
+                    set_passthrough(&window, true);
+                }
+            }
             Event::UserEvent(Ev::Script(js)) => {
                 let _ = webview.evaluate_script(&js);
             }
             Event::UserEvent(Ev::Open) => {
-                window.set_ignore_cursor_events(false).ok();
+                set_passthrough(&window, false);
                 let _ = webview.evaluate_script("app.open()");
             }
             Event::UserEvent(Ev::Show(panel)) => {
                 sys::remember_foreground();
                 OPEN.store(true, Ordering::Relaxed);
-                window.set_ignore_cursor_events(false).ok();
+                set_passthrough(&window, false);
                 let _ = webview.evaluate_script(&format!("app.show('{panel}')"));
             }
             Event::UserEvent(Ev::Menu(id)) => match id.as_str() {
@@ -335,8 +354,15 @@ fn main() {
                 let Ok(m) = serde_json::from_str::<Value>(&body) else { return };
                 let s = |k: &str| m[k].as_str().unwrap_or_default().to_string();
                 match m["t"].as_str().unwrap_or_default() {
+                    "edge" => {
+                        if !OPEN.swap(true, Ordering::Relaxed) {
+                            sys::remember_foreground();
+                            set_passthrough(&window, false);
+                            let _ = webview.evaluate_script("app.open()");
+                        }
+                    }
                     "pass" => {
-                        window.set_ignore_cursor_events(true).ok();
+                        set_passthrough(&window, true);
                         OPEN.store(false, Ordering::Relaxed);
                     }
                     "copy" => set_clip(&s("text")),
@@ -385,7 +411,7 @@ fn main() {
                     "alarm" => {
                         sys::beep();
                         OPEN.store(true, Ordering::Relaxed);
-                        window.set_ignore_cursor_events(false).ok();
+                        set_passthrough(&window, false);
                     }
                     "log" => log(&s("text")),
                     "addApp" => add_app(proxy.clone()),

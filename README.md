@@ -65,12 +65,12 @@ Move your mouse to the right edge and it pours out: emoji, clipboard history, co
 | **Windows 10/11** | `RightPanel-Setup.exe` | Recommended. Per-user install, no admin needed |
 | | `RightPanel-portable.exe` / `.zip` | No install, just run it |
 | **macOS 11+** *(beta)* | `RightPanel-macos-arm64.dmg` / `-x64.dmg` | Not notarized: right-click the app → **Open** the first time |
-| **Linux** *(beta)* | `.deb` or `.tar.gz` | Needs WebKitGTK 4.1 and X11 (Wayland can't report the mouse position) |
+| **Linux** *(beta)* | `.deb` or `.tar.gz` | Needs WebKitGTK 4.1. Works on X11 and Wayland (via XWayland) |
 
 Windows uses the built-in WebView2 runtime (already on Windows 10/11), which is why the app is under 1 MB.
 
 ### Beta notes for macOS and Linux
-Core features work everywhere. A few are Windows-only for now and are hidden on other systems: *auto-paste into the previous app* (items are copied instead), *screen eyedropper*, *Pin window*, *Show desktop* and app icons. Linux has no tray icon; open the panel from the screen edge. Media keys on Linux use `playerctl` / `pactl`.
+Core features work everywhere. A few are Windows-only for now and are hidden on other systems: *auto-paste into the previous app* (items are copied instead), *screen eyedropper*, *Pin window*, *Show desktop* and app icons. On Wayland (GNOME, KDE…) the app runs through XWayland so it can sit on the screen edge; the tray icon needs `libayatana-appindicator3-1`. Media keys on Linux use `playerctl` / `pactl`.
 
 ## Build from source
 
