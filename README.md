@@ -7,8 +7,8 @@
 **A liquid side panel that lives on the edge of your screen.**<br>
 Move your mouse to the right edge and it pours out: emoji, clipboard history, colors, notes, your apps and a dozen handy tools.
 
-[![Latest release](https://img.shields.io/github/v/release/raminturne/right-panel?style=flat-square&color=000&cacheSeconds=3600)](https://github.com/raminturne/right-panel/releases/latest)
-[![Downloads](https://img.shields.io/github/downloads/raminturne/right-panel/total?style=flat-square&color=000&cacheSeconds=3600)](https://github.com/raminturne/right-panel/releases)
+[![Latest release](https://img.shields.io/github/v/release/raminturne/right-panel?style=flat-square&color=000&cacheSeconds=300)](https://github.com/raminturne/right-panel/releases/latest)
+[![Downloads](https://img.shields.io/github/downloads/raminturne/right-panel/total?style=flat-square&color=000&cacheSeconds=300)](https://github.com/raminturne/right-panel/releases)
 [![Build](https://img.shields.io/github/actions/workflow/status/raminturne/right-panel/release.yml?style=flat-square)](https://github.com/raminturne/right-panel/actions)
 ![Size](https://img.shields.io/badge/size-~0.8%20MB-000?style=flat-square)
 ![License](https://img.shields.io/badge/license-MIT-000?style=flat-square)
