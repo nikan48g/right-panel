@@ -350,10 +350,28 @@ pub fn pick_file() -> Option<String> {
     Some(String::from_utf16_lossy(&buf[..len]))
 }
 
-/// Uses the same native picker as app shortcuts. The package extension is validated
-/// by the plugin host after selection, so choosing an arbitrary file is harmless.
+/// Native package picker, deliberately separate from the app-shortcut dialog.
 pub fn pick_plugin_package() -> Option<String> {
-    pick_file()
+    let mut buf = vec![0u16; 1024];
+    let filter: Vec<u16> =
+        "Right Panel plugins\0*.rpp;*.zip\0Right Panel packages\0*.rpp\0ZIP archives\0*.zip\0\0"
+            .encode_utf16()
+            .collect();
+    let title = wide("Install Right Panel plugin");
+    unsafe {
+        let mut ofn: OPENFILENAMEW = std::mem::zeroed();
+        ofn.lStructSize = std::mem::size_of::<OPENFILENAMEW>() as u32;
+        ofn.lpstrFilter = filter.as_ptr();
+        ofn.lpstrFile = buf.as_mut_ptr();
+        ofn.nMaxFile = buf.len() as u32;
+        ofn.lpstrTitle = title.as_ptr();
+        ofn.Flags = OFN_FILEMUSTEXIST | OFN_PATHMUSTEXIST;
+        if GetOpenFileNameW(&mut ofn) == 0 {
+            return None;
+        }
+    }
+    let len = buf.iter().position(|&c| c == 0).unwrap_or(0);
+    Some(String::from_utf16_lossy(&buf[..len]))
 }
 
 pub fn launch(path: &str) {
