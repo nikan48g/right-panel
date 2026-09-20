@@ -22,6 +22,7 @@ pub struct PluginInfo {
     pub manifest: Manifest,
     pub enabled: bool,
     pub error: Option<String>,
+    pub icon_data: Option<String>,
     /// This is deliberately only sent to the trusted host page. It is placed in an
     /// opaque-origin sandboxed iframe, never directly in the application DOM.
     pub document: Option<String>,
@@ -69,10 +70,19 @@ impl Manager {
             serde_json::from_str(&raw).map_err(|e| format!("manifest JSON: {e}"))?;
         manifest.validate(dir)?;
         let document = build_document(dir, &manifest).map_err(|e| format!("entry: {e}"))?;
+        let icon_data = if manifest.icon.ends_with(".svg") {
+            fs::read(dir.join(&manifest.icon))
+                .ok()
+                .filter(|b| b.len() <= 128 * 1024)
+                .map(|b| format!("data:image/svg+xml;base64,{}", crate::util::base64(&b)))
+        } else {
+            None
+        };
         Ok(PluginInfo {
             enabled: enabled.get(&manifest.id).copied().unwrap_or(true),
             manifest,
             error: None,
+            icon_data,
             document: Some(document),
         })
     }

@@ -191,9 +191,19 @@
     transition: opacity .25s, transform .55s var(--pop); pointer-events: none; box-shadow: 0 0 0 1px var(--line), 0 10px 30px -10px rgba(0,0,0,.5); }
   .toast.show { opacity: 1; transform: none; }
   .plugin-frame { width: 100%; height: 390px; border: 0; border-radius: 12px; background: var(--soft); }
-  .plugin-card { background: var(--soft); border-radius: 12px; padding: 10px; display: grid; gap: 5px; }
-  .plugin-card p { margin: 0; color: var(--muted); font-size: 11px; line-height: 1.35; }
-  .plugin-meta { font-size: 10px; color: var(--muted); }
+  .plugin-card { background: var(--soft); border: 1px solid var(--line); border-radius: 16px; padding: 12px; display: grid; gap: 9px; }
+  .plugin-top { display:flex; align-items:center; gap:10px; min-width:0; }
+  .plugin-icon { width:34px; height:34px; display:grid; place-items:center; border-radius:10px; background:var(--soft2); flex:none; color:#fff; }
+  .plugin-icon svg,.plugin-icon img { width:21px; height:21px; object-fit:contain; }
+  .plugin-title { min-width:0; flex:1; }
+  .plugin-title strong { display:block; font-size:13px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .plugin-card p { margin: 0; color: var(--muted); font-size: 11px; line-height: 1.45; }
+  .plugin-meta { display:block; font-size: 10px; color: var(--muted); margin-top:2px; }
+  .plugin-actions { display:grid; grid-template-columns:1fr 1fr auto; gap:6px; }
+  .plugin-action { border:0; border-radius:9px; min-height:30px; padding:0 10px; background:var(--soft2); color:var(--ink); font:600 11px system-ui; cursor:pointer; }
+  .plugin-action:hover { background:var(--inv); color:var(--inv-ink); }
+  .plugin-action.danger:hover { background:#d33; color:#fff; }
+  .plugin-action:disabled { opacity:.35; cursor:not-allowed; }
 </style>
 </head>
 <body>
@@ -389,7 +399,9 @@ const W = {
   settings:  { name: 'Settings', kind: 'panel', fixed: true },
   winset:    { name: OS === 'windows' ? 'Win Settings' : 'Settings', icon: I('<path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/>'), kind: 'action', run: () => { app.close(); send('open', { target: 'ms-settings:' }); } },
 };
-function refreshPluginRegistry() { for (const id of Object.keys(W)) if (id.startsWith('plugin:')) delete W[id]; for (const p of PLUGINS) W[`plugin:${p.id}`] = { name: p.name, icon: '🧩', kind: 'plugin', plugin: p }; }
+const PLUGIN_FALLBACK_ICON = I('<path d="M8 3v4M16 3v4M6 7h12v4a6 6 0 0 1-6 6 6 6 0 0 1-6-6zM9 21v-4M15 21v-4"/>');
+const pluginIcon = p => p.icon_data ? `<img src="${p.icon_data}" alt="">` : PLUGIN_FALLBACK_ICON;
+function refreshPluginRegistry() { for (const id of Object.keys(W)) if (id.startsWith('plugin:')) delete W[id]; for (const p of PLUGINS) W[`plugin:${p.id}`] = { name: p.name, icon: pluginIcon(p), kind: 'plugin', plugin: p }; }
 refreshPluginRegistry();
 const DEF_DOCK = ['emoji', 'clip', 'color', 'shot', 'note', 'more'];
 const DEF_MORE = ['calc', 'timer', 'stopwatch', 'search', 'snippets', 'text', 'media', 'clock', 'gen', 'pass', 'unit', 'folders', 'awake', 'pinwin', 'desktop', 'screenoff', 'lock', 'taskmgr', 'winset'];
@@ -570,7 +582,6 @@ function frame(now) {
 requestAnimationFrame(frame);
 
 /* ================= dock + More rendering ================= */
-const panels = $$('.panel');
 function toolHTML(id) {
   const w = info(id); if (!w) return '';
   return `<button class="tool ${w.kind === 'app' ? 'app' : ''} ${id === 'awake' && awake ? 'on' : ''}" draggable="true" data-w="${id}" title="${esc(w.name)}">${w.icon}</button>`;
@@ -605,7 +616,7 @@ function setPanel(name, fromMore = false) {
   else if (name && panel && name !== panel) grow.vel -= 3;       // little squish when switching
   panel = name; sub = !!name && fromMore;
   flyUi.classList.toggle('sub', sub);
-  if (name) panels.forEach(p => p.classList.toggle('on', p.dataset.name === name));   // keep old content while it shrinks away
+  if (name) $$('.panel').forEach(p => p.classList.toggle('on', p.dataset.name === name));   // includes dynamically-created plugin panels
   markActive();
   if (name === 'more') renderTiles();
   if (name === 'emoji') setTimeout(() => $('#emojiSearch').focus({ preventScroll: true }), 60);
@@ -747,7 +758,7 @@ $('#addApp').onclick = () => send('addApp');
 function renderPlugins() {
   $('#pluginList').innerHTML = PLUGINS.length ? PLUGINS.map(p => {
     const enabled = S.plugins.enabled[p.id] !== false, perms = (p.permissions || []).join(', ') || 'No native permissions';
-    return `<div class="plugin-card" data-plugin="${esc(p.id)}"><b>🧩 ${esc(p.name)} <small class="plugin-meta">v${esc(p.version)} · ${esc(p.author || 'Unknown author')}</small></b><p>${esc(p.description || 'No description')}</p><span class="plugin-meta">Permissions: ${esc(perms)}</span><div class="row"><button class="wb" data-plugin-toggle>${enabled ? 'Disable' : 'Enable'}</button><button class="wb" data-plugin-open ${enabled ? '' : 'disabled'}>Open</button><button class="wb" data-plugin-uninstall>Uninstall</button></div></div>`;
+    return `<article class="plugin-card" data-plugin="${esc(p.id)}"><div class="plugin-top"><span class="plugin-icon">${pluginIcon(p)}</span><span class="plugin-title"><strong>${esc(p.name)}</strong><small class="plugin-meta">v${esc(p.version)} · ${esc(p.author || 'Unknown author')}</small></span></div><p>${esc(p.description || 'No description')}</p><span class="plugin-meta">Permissions: ${esc(perms)}</span><div class="plugin-actions"><button class="plugin-action" data-plugin-toggle>${enabled ? 'Disable' : 'Enable'}</button><button class="plugin-action" data-plugin-open ${enabled ? '' : 'disabled'}>Open</button><button class="plugin-action danger" data-plugin-uninstall title="Uninstall">×</button></div></article>`;
   }).join('') : '<div class="empty">No plugins installed yet</div>';
 }
 function openPlugin(p, fromMore) {
