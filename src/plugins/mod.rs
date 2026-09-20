@@ -93,7 +93,7 @@ impl Manager {
         let file = fs::File::open(archive).map_err(|e| e.to_string())?;
         let mut zip =
             zip::ZipArchive::new(file).map_err(|e| format!("not a valid .rpp/.zip: {e}"))?;
-        if zip.len() == 0 || zip.len() > 128 {
+        if zip.is_empty() || zip.len() > 128 {
             return Err("package has an invalid number of files".into());
         }
         let temp = self.root.join(".installing");

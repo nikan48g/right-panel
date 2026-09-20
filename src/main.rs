@@ -102,14 +102,13 @@ fn spawn_clip_watch(proxy: EventLoopProxy<Ev>) {
             let s = sys::clip_seq();
             if s != seq {
                 seq = s;
-                if let Some(t) = get_clip() {
-                    if t.len() < 100_000
-                        && proxy
-                            .send_event(Ev::Script(format!("app.clip({})", json!(t))))
-                            .is_err()
-                    {
-                        return;
-                    }
+                if let Some(t) = get_clip()
+                    && t.len() < 100_000
+                    && proxy
+                        .send_event(Ev::Script(format!("app.clip({})", json!(t))))
+                        .is_err()
+                {
+                    return;
                 }
             }
             thread::sleep(Duration::from_millis(if cfg!(windows) { 400 } else { 800 }));
@@ -354,7 +353,7 @@ fn main() {
     #[cfg(windows)]
     {
         use tao::platform::windows::WindowExtWindows;
-        sys::set_self_window(window.hwnd() as isize);
+        sys::set_self_window(window.hwnd());
     }
 
     let mut ctx = WebContext::new(Some(dir.join("webview")));
