@@ -220,7 +220,8 @@ fn build_document(dir: &Path, m: &Manifest) -> Result<String, String> {
         id = serde_json::to_string(&m.id).unwrap(),
         version = serde_json::to_string(&m.version).unwrap()
     );
-    Ok(html.replacen("</head>", &(bridge + "</head>"), 1))
+    // Must precede every plugin script: entries may omit a head tag entirely.
+    Ok(format!("{bridge}{html}"))
 }
 
 #[cfg(test)]
@@ -231,5 +232,13 @@ mod tests {
         for p in ["../x", "/etc/passwd", "C:\\x", "a/../../x"] {
             assert!(!safe_relative(Path::new(p)));
         }
+    }
+
+    #[test]
+    fn bridge_precedes_entry_markup() {
+        assert!(
+            format!("<script>bridge</script>{}", "<button>plugin</button>")
+                .starts_with("<script>bridge")
+        );
     }
 }

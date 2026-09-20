@@ -508,7 +508,7 @@ fn main() {
                             "ui.toast" => { let _=webview.evaluate_script(&format!("app.toast({})", json!(args["message"].as_str().unwrap_or("Plugin")))); Ok(Value::Null) },
                             _ => Err("unknown plugin API operation".into()),
                         };
-                        let msg = match answer { Ok(value) => json!({"request":request,"ok":true,"value":value}), Err(error)=>json!({"request":request,"ok":false,"error":error}) };
+                        let msg = match answer { Ok(value) => json!({"id":id,"request":request,"ok":true,"value":value}), Err(error)=>json!({"id":id,"request":request,"ok":false,"error":error}) };
                         let _ = webview.evaluate_script(&format!("app.pluginReply({})", msg));
                     }
                     "screenshot" => sys::screenshot(),

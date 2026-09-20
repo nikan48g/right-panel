@@ -756,7 +756,7 @@ function openPlugin(p, fromMore) {
   anchorY = fromMore ? fy.v : (dockEl(id) ? anchorOf(dockEl(id)) : fy.v); setPanel(id, fromMore);
 }
 window.addEventListener('message', e => { const m=e.data; if(!m || m.rightPanelPlugin!==1 || typeof m.id!=='string') return; const f=$(`.panel[data-name="plugin:${CSS.escape(m.id)}"] iframe`); if(!f || f.contentWindow!==e.source)return; send('pluginBridge',{id:m.id,request:m.request,op:m.op,args:m.args||{}}); });
-app.pluginReply = m => { const f=$(`.panel[data-name^="plugin:"] iframe`); f?.contentWindow?.postMessage(Object.assign({rightPanelPlugin:1},m),'*'); };
+app.pluginReply = m => { const f=$(`.panel[data-name="plugin:${CSS.escape(m.id)}"] iframe`); f?.contentWindow?.postMessage(Object.assign({rightPanelPlugin:1},m),'*'); };
 app.pluginsUpdated = (items, message) => { PLUGINS=items||[]; refreshPluginRegistry(); normalize(); renderAll(); renderPlugins(); if(message)toast(message); };
 $('#installPlugin').onclick=()=>send('pluginInstall'); $('#reloadPlugins').onclick=()=>send('pluginReload');
 $('#pluginList').addEventListener('click', e => { const card=e.target.closest('[data-plugin]'); if(!card)return; const id=card.dataset.plugin,p=PLUGINS.find(x=>x.id===id); if(e.target.closest('[data-plugin-toggle]')) { S.plugins.enabled[id]=S.plugins.enabled[id]===false; save(); normalize(); renderAll(); renderPlugins(); } else if(e.target.closest('[data-plugin-open]')) openPlugin(p,false); else if(e.target.closest('[data-plugin-uninstall]')) send('pluginUninstall',{id}); });
