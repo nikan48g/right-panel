@@ -190,6 +190,10 @@
   .toast { position: fixed; right: 100px; bottom: 20px; background: var(--liquid); color: var(--ink); padding: 8px 14px; border-radius: 999px; font-size: 12px; opacity: 0; transform: translateY(16px) scale(.8);
     transition: opacity .25s, transform .55s var(--pop); pointer-events: none; box-shadow: 0 0 0 1px var(--line), 0 10px 30px -10px rgba(0,0,0,.5); }
   .toast.show { opacity: 1; transform: none; }
+  .plugin-frame { width: 100%; height: 390px; border: 0; border-radius: 12px; background: var(--soft); }
+  .plugin-card { background: var(--soft); border-radius: 12px; padding: 10px; display: grid; gap: 5px; }
+  .plugin-card p { margin: 0; color: var(--muted); font-size: 11px; line-height: 1.35; }
+  .plugin-meta { font-size: 10px; color: var(--muted); }
 </style>
 </head>
 <body>
@@ -315,7 +319,7 @@
   </div>
 
   <div class="panel" data-name="settings">
-    <div class="tabs" id="stabs"><button data-p="widgets" class="on">Widgets</button><button data-p="look">Theme</button><button data-p="general">General</button></div>
+    <div class="tabs" id="stabs"><button data-p="widgets" class="on">Widgets</button><button data-p="plugins">Plugins</button><button data-p="look">Theme</button><button data-p="general">General</button></div>
     <div class="spage on" data-p="widgets">
       <div class="wsec"><span>In the dock</span><button class="link" id="addApp">＋ Add app</button></div>
       <div class="wlist scroll" id="wDock" data-zone="dock" style="max-height:190px"></div>
@@ -324,6 +328,11 @@
     </div>
     <div class="spage" data-p="look">
       <div class="themes" id="themes"></div>
+    </div>
+    <div class="spage" data-p="plugins">
+      <div class="row"><button class="btn primary" id="installPlugin">Install plugin</button><button class="btn" id="reloadPlugins">Reload</button></div>
+      <div class="hint">Packages run in a sandbox. Requested permissions are shown below.</div>
+      <div class="list scroll" id="pluginList" style="max-height:340px"></div>
     </div>
     <div class="spage" data-p="general">
       <div class="set"><span id="startLbl">Start with Windows</span><button class="toggle" id="tStartup"></button></div>
@@ -342,7 +351,9 @@ const send = (t, o = {}) => window.ipc.postMessage(JSON.stringify({ t, ...o }));
 const init = window.__init || {};
 const OS = init.platform || 'windows';   // windows | macos | linux
 const S = Object.assign({ theme: 'midnight', accent: '#000000', startup: false, paste: true, magnify: true, recentEmoji: [], recentColors: [],
-  hidden: [], apps: [], snippets: [], pins: [], engine: 'Google', zones: ['UTC', 'Europe/London', 'America/New_York', 'Asia/Tokyo'] }, init.settings || {});
+  hidden: [], apps: [], snippets: [], pins: [], engine: 'Google', zones: ['UTC', 'Europe/London', 'America/New_York', 'Asia/Tokyo'], plugins: { enabled: {}, settings: {} } }, init.settings || {});
+S.plugins = Object.assign({ enabled: {}, settings: {} }, S.plugins || {});
+let PLUGINS = Array.isArray(init.plugins) ? init.plugins : [];
 const save = () => send('settings', { settings: S });
 const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -378,6 +389,8 @@ const W = {
   settings:  { name: 'Settings', kind: 'panel', fixed: true },
   winset:    { name: OS === 'windows' ? 'Win Settings' : 'Settings', icon: I('<path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/>'), kind: 'action', run: () => { app.close(); send('open', { target: 'ms-settings:' }); } },
 };
+function refreshPluginRegistry() { for (const id of Object.keys(W)) if (id.startsWith('plugin:')) delete W[id]; for (const p of PLUGINS) W[`plugin:${p.id}`] = { name: p.name, icon: '🧩', kind: 'plugin', plugin: p }; }
+refreshPluginRegistry();
 const DEF_DOCK = ['emoji', 'clip', 'color', 'shot', 'note', 'more'];
 const DEF_MORE = ['calc', 'timer', 'stopwatch', 'search', 'snippets', 'text', 'media', 'clock', 'gen', 'pass', 'unit', 'folders', 'awake', 'pinwin', 'desktop', 'screenoff', 'lock', 'taskmgr', 'winset'];
 
@@ -385,7 +398,7 @@ const DEF_MORE = ['calc', 'timer', 'stopwatch', 'search', 'snippets', 'text', 'm
 function normalize() {
   if (!S.dock) S.dock = (S.order && S.order.length ? S.order : [...DEF_DOCK, ...S.apps.map(a => a.id)]);
   if (!S.more) S.more = [...DEF_MORE];
-  const known = new Set([...Object.keys(W).filter(k => !W[k].fixed && (!W[k].os || W[k].os.includes(OS))), ...S.apps.map(a => a.id)]);
+  const known = new Set([...Object.keys(W).filter(k => !W[k].fixed && (!W[k].os || W[k].os.includes(OS)) && (!k.startsWith('plugin:') || S.plugins.enabled[W[k].plugin.id] !== false)), ...S.apps.map(a => a.id)]);
   S.dock = [...new Set(S.dock)].filter(id => known.has(id));
   S.more = [...new Set(S.more)].filter(id => known.has(id) && !S.dock.includes(id) && !W[id]?.dockOnly);
   if (!S.dock.includes('more')) S.dock.push('more');
@@ -612,6 +625,7 @@ function openWidget(id) {
   const w = info(id); if (!w) return;
   if (w.kind === 'app') { app.close(); send('launch', { path: w.app.path }); return; }
   if (w.kind === 'action') { w.run(); return; }
+  if (w.kind === 'plugin') { openPlugin(w.plugin, false); return; }
   const inDock = dockEl(id);
   if (inDock) { anchorY = anchorOf(inDock); setPanel(id); }
   else { const m = dockEl('more'); anchorY = m ? anchorOf(m) : innerHeight / 2; setPanel(id, true); }
@@ -623,6 +637,7 @@ tabUi.addEventListener('click', e => {
   const id = t.dataset.w, w = info(id);
   if (w.kind === 'app') { setTimeout(() => { app.close(); send('launch', { path: w.app.path }); }, 160); return; }
   if (w.kind === 'action') { w.run(); return; }
+  if (w.kind === 'plugin') { openPlugin(w.plugin, false); return; }
   anchorY = anchorOf(t);
   setPanel(panel === id && !sub ? null : id);
 });
@@ -725,8 +740,26 @@ $('#stabs').addEventListener('click', e => {
   const p = e.target.dataset.p; if (!p) return;
   $$('#stabs button').forEach(b => b.classList.toggle('on', b.dataset.p === p));
   $$('.spage').forEach(x => x.classList.toggle('on', x.dataset.p === p));
+  if (p === 'plugins') renderPlugins();
 });
 $('#addApp').onclick = () => send('addApp');
+
+function renderPlugins() {
+  $('#pluginList').innerHTML = PLUGINS.length ? PLUGINS.map(p => {
+    const enabled = S.plugins.enabled[p.id] !== false, perms = (p.permissions || []).join(', ') || 'No native permissions';
+    return `<div class="plugin-card" data-plugin="${esc(p.id)}"><b>🧩 ${esc(p.name)} <small class="plugin-meta">v${esc(p.version)} · ${esc(p.author || 'Unknown author')}</small></b><p>${esc(p.description || 'No description')}</p><span class="plugin-meta">Permissions: ${esc(perms)}</span><div class="row"><button class="wb" data-plugin-toggle>${enabled ? 'Disable' : 'Enable'}</button><button class="wb" data-plugin-open ${enabled ? '' : 'disabled'}>Open</button><button class="wb" data-plugin-uninstall>Uninstall</button></div></div>`;
+  }).join('') : '<div class="empty">No plugins installed yet</div>';
+}
+function openPlugin(p, fromMore) {
+  if (S.plugins.enabled[p.id] === false) return toast('Plugin is disabled'); const id = `plugin:${p.id}`;
+  let el = $(`.panel[data-name="${id}"]`); if (!el) { el=document.createElement('div'); el.className='panel'; el.dataset.name=id; el.innerHTML=`<div class="head"><button class="back">←</button><h4>${esc(p.name)}</h4></div>`; const f=document.createElement('iframe'); f.className='plugin-frame'; f.setAttribute('sandbox','allow-scripts'); f.srcdoc=p.document || '<p>Plugin entry could not load.</p>'; el.appendChild(f); flyUi.appendChild(el); }
+  anchorY = fromMore ? fy.v : (dockEl(id) ? anchorOf(dockEl(id)) : fy.v); setPanel(id, fromMore);
+}
+window.addEventListener('message', e => { const m=e.data; if(!m || m.rightPanelPlugin!==1 || typeof m.id!=='string') return; const f=$(`.panel[data-name="plugin:${CSS.escape(m.id)}"] iframe`); if(!f || f.contentWindow!==e.source)return; send('pluginBridge',{id:m.id,request:m.request,op:m.op,args:m.args||{}}); });
+app.pluginReply = m => { const f=$(`.panel[data-name^="plugin:"] iframe`); f?.contentWindow?.postMessage(Object.assign({rightPanelPlugin:1},m),'*'); };
+app.pluginsUpdated = (items, message) => { PLUGINS=items||[]; refreshPluginRegistry(); normalize(); renderAll(); renderPlugins(); if(message)toast(message); };
+$('#installPlugin').onclick=()=>send('pluginInstall'); $('#reloadPlugins').onclick=()=>send('pluginReload');
+$('#pluginList').addEventListener('click', e => { const card=e.target.closest('[data-plugin]'); if(!card)return; const id=card.dataset.plugin,p=PLUGINS.find(x=>x.id===id); if(e.target.closest('[data-plugin-toggle]')) { S.plugins.enabled[id]=S.plugins.enabled[id]===false; save(); normalize(); renderAll(); renderPlugins(); } else if(e.target.closest('[data-plugin-open]')) openPlugin(p,false); else if(e.target.closest('[data-plugin-uninstall]')) send('pluginUninstall',{id}); });
 
 const toastEl = $('#toast'); let tt;
 function toast(msg) { toastEl.textContent = msg; toastEl.classList.remove('show'); void toastEl.offsetWidth; toastEl.classList.add('show'); clearTimeout(tt); tt = setTimeout(() => toastEl.classList.remove('show'), 1600); }

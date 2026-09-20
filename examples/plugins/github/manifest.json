@@ -1,0 +1,1 @@
+{"manifest_version":1,"id":"github-quick-open","name":"GitHub Quick Open","version":"1.0.0","author":"Right Panel Community","entry":"index.html","permissions":["storage","system.openUrl"]}
