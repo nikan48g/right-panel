@@ -58,8 +58,6 @@ pub fn data_dir() -> PathBuf {
     dir
 }
 
-pub fn set_self_window(_: isize) {}
-
 /// macOS reports the cursor in points; the window is placed in physical pixels.
 pub fn set_scale(s: f64) {
     SCALE.store(s.to_bits(), Ordering::Relaxed);

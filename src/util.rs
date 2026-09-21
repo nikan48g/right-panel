@@ -10,6 +10,7 @@ pub fn display_name(path: &str) -> String {
 }
 
 /* ---- tiny PNG encoder (uncompressed deflate, fine for 64px icons) ---- */
+#[cfg(windows)]
 fn crc32(data: &[u8]) -> u32 {
     let mut c = !0u32;
     for &b in data {
@@ -25,6 +26,7 @@ fn crc32(data: &[u8]) -> u32 {
     !c
 }
 
+#[cfg(windows)]
 pub fn png(w: u32, h: u32, rgba: &[u8]) -> Vec<u8> {
     let mut raw = Vec::with_capacity((w * h * 4 + h) as usize);
     for row in rgba.chunks((w * 4) as usize) {

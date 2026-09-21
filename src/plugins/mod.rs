@@ -191,7 +191,9 @@ impl Manager {
 }
 
 fn safe_relative(path: &Path) -> bool {
-    !path.as_os_str().is_empty()
+    let raw = path.to_string_lossy();
+    !raw.is_empty()
+        && !raw.contains(['\\', ':'])
         && !path.is_absolute()
         && path.components().all(|c| matches!(c, Component::Normal(_)))
 }
